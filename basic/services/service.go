@@ -1,17 +1,25 @@
-package main
+package service
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-)
+type Producer interface {
+	Produce() ([]string, error)
+}
 
-func ScanMask() string { // Функция сканирует текст из буфера и возвращает введеный текст с замаскированным URL
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Введите текст: ")
-	input, _ := reader.ReadString('\n')
+type Presenter interface {
+	Present([]string) error
+}
+
+type Service struct {
+	prod Producer
+	pres Presenter
+}
+
+func NewService(p Producer, pr Presenter) *Service {
+	return &Service{prod: p, pres: pr}
+}
+
+func (s *Service) Mask(pr string) string {
 	var (
-		sTOb     []byte = []byte(input)     // Переводит вводимую строку в срез байтов
+		sTOb     []byte = []byte(pr)        // Переводит вводимую строку в срез байтов
 		bHTTP    []byte = []byte("http://") // Задаем (http://) виде байтового среза
 		sizeHTTP int    = len(bHTTP)        // Размер bHTTP
 		size     int    = len(sTOb)
@@ -46,8 +54,20 @@ func ScanMask() string { // Функция сканирует текст из б
 	return string(output)
 }
 
-func main() {
-	var output string = ScanMask()
-	var outPut string = output
-	fmt.Println(outPut)
+func (s *Service) Run() error {
+	slText, err := s.prod.Produce()
+	if err != nil {
+		return err
+	}
+
+	sL := make([]string, 0, len(slText))
+
+	for _, v := range slText {
+		sL = append(sL, s.Mask(v))
+	}
+
+	if err := s.pres.Present(sL); err != nil {
+		return err
+	}
+	return nil
 }
