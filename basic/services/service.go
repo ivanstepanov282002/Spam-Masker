@@ -1,5 +1,7 @@
 package service
 
+import "sync"
+
 type Producer interface {
 	Produce() ([]string, error)
 }
@@ -60,10 +62,36 @@ func (s *Service) Run() error {
 		return err
 	}
 
+	input := make(chan string, len(slText))
+	chMask := make(chan string, len(slText))
+	limiter := make(chan struct{}, 10)
+
+	go func() {
+		for _, d := range slText {
+			input <- d
+		}
+		close(input)
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(len(slText))
+
+	for i := 0; i < len(slText); i++ {
+		go func() {
+			defer wg.Done()
+			limiter <- struct{}{}
+			chMask <- s.Mask(<-input)
+			<-limiter
+
+		}()
+	}
+
+	wg.Wait()
+
 	sL := make([]string, 0, len(slText))
 
-	for _, v := range slText {
-		sL = append(sL, s.Mask(v))
+	for i := 0; i < len(slText); i++ {
+		sL = append(sL, <-chMask)
 	}
 
 	if err := s.pres.Present(sL); err != nil {
